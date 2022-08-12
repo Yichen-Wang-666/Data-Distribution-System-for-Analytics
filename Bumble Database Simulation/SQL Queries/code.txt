@@ -1,0 +1,106 @@
+/*
+The average number of swipes of our least active users (last active date > 2 months):
+which illustrates the number of swipes needed to find "love"
+*/
+
+SELECT total.swipe/success.suc AS success_rate
+FROM (SELECT count(A.user_ID1) AS suc
+	FROM user_has_seen AS A, user_has_seen AS B, Account_and_login_info AS info, user_info AS u
+	WHERE A.user_ID1=B.user_ID2 
+	AND A.user_ID2=B.user_ID1
+	AND A.user_ID1 = u.user_ID
+	AND info.user_ID = u.user_ID
+	AND ((A.user_ID1_action="right swipe" AND (B.user_ID1_action="right swipe" OR B.user_ID1_action="super swipe"))
+	  OR
+	 (A.user_ID1_action="super swipe" AND (B.user_ID1_action="right swipe" OR B.user_ID1_action="super swipe"))
+	)
+	AND DATEDIFF("2021-09-10",info.last_active_date) > 60
+    ) as success
+    ,
+    (SELECT count(A.user_ID1) as swipe
+	FROM user_has_seen AS A, Account_and_login_info AS info, user_info AS u
+	WHERE A.user_ID1=info.user_ID
+	AND info.user_ID = u.user_ID
+    ) AS total
+
+/*
+Calculate total revenue from subscriptions (all time revenue)
+*/
+
+SELECT ROUND(SUM(CEILING(DATEDIFF(IFNULL(ahs.date_ended,'2021-09-12'),ahs.date_started)/30))*AVG(s.monthly_price)*2,2) AS total_revenue
+FROM account_has_subscription AS ahs, Subscription AS s
+WHERE ahs.subscriptionID = s.subscriptionID
+AND ahs.subscriptionID = 102
+
+
+/*
+find the conversion rate of users changing from free subscription to paid subscription
+*/
+
+SELECT COUNT(sub.idNum)/COUNT(DISTINCT ahs.user_ID)
+FROM account_has_subscription AS ahs,
+(
+SELECT ahs.user_ID as idNum
+FROM account_has_subscription AS ahs
+GROUP BY ahs.user_ID
+HAVING SUM(ahs.subscriptionID=102)=1
+) AS sub
+
+
+
+CREATE or replace VIEW USER_city_hobby_montreal as
+SELECT u.user_ID, l.city, uh.idHobby, h.hobby_name
+FROM user_info as u
+JOIN gender_orientation as go on u.idgender_orientation = go.idgender_orientation
+JOIN user_info_has_Hobby as uh on u.user_ID = uh.user_ID
+JOIN Hobby as h on uh.idHobby = h.idHobby
+JOIN Location as l on u.current_latitude_longitude = l.latitude_longitude
+WHERE l.city = "Montreal"
+GROUP BY u.user_ID, uh.idHobby;
+
+CREATE or replace VIEW USER_city_hobby_toronto as
+SELECT u.user_ID, l.city, uh.idHobby, h.hobby_name
+FROM user_info as u
+JOIN gender_orientation as go on u.idgender_orientation = go.idgender_orientation
+JOIN user_info_has_Hobby as uh on u.user_ID = uh.user_ID
+JOIN Hobby as h on uh.idHobby = h.idHobby
+JOIN Location as l on u.current_latitude_longitude = l.latitude_longitude
+WHERE l.city = "Toronto"
+GROUP BY u.user_ID, uh.idHobby;
+
+CREATE or replace VIEW USER_city_hobby_vancouver as
+SELECT u.user_ID, l.city, uh.idHobby, h.hobby_name
+FROM user_info as u
+JOIN gender_orientation as go on u.idgender_orientation = go.idgender_orientation
+JOIN user_info_has_Hobby as uh on u.user_ID = uh.user_ID
+JOIN Hobby as h on uh.idHobby = h.idHobby
+JOIN Location as l on u.current_latitude_longitude = l.latitude_longitude
+WHERE l.city = "Vancouver"
+GROUP BY u.user_ID, uh.idHobby;
+
+CREATE or replace VIEW m_fav as
+SELECT m.city, m.idHobby, m.hobby_name, count(m.user_ID) as Num_user
+from USER_city_hobby_montreal as m
+group by m.idHobby
+order by count(m.user_ID) DESC
+LIMIT 1;
+
+CREATE or replace VIEW v_fav as
+SELECT v.city, v.idHobby, v.hobby_name, count(v.user_ID) as Num_user
+from USER_city_hobby_vancouver as v
+group by v.idHobby
+order by count(v.user_ID) DESC
+LIMIT 1;
+
+CREATE or replace VIEW t_fav as
+SELECT t.city, t.idHobby, t.hobby_name, count(t.user_ID) as Num_user
+from USER_city_hobby_toronto as t
+group by t.idHobby
+order by count(t.user_ID) DESC
+LIMIT 1;
+
+SELECT * FROM m_fav
+UNION
+SELECT * FROM t_fav
+UNION
+SELECT * FROM v_fav
