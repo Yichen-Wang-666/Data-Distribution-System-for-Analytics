@@ -1,0 +1,143 @@
+1
+SELECT `orders`.orderNumber, `orders`.orderDate,`products`.productCode,
+`orderdetails`.quantityOrdered, (`orderdetails`.priceEach*`orderdetails`.quantityOrdered) AS Total_Payment,
+`customers`.customerNumber, `customers`.customerName FROM `orders`, `products`, `orderdetails`,
+`customers` 
+WHERE `orders`.orderNumber = 10101 
+AND `customers`.customerNumber=`orders`.customerNumber 
+AND `orders`.orderNumber = `orderdetails`.orderNumber 
+AND `products`.productCode=`orderdetails`.productCode
+
+# slide 5,6 p71
+------------------------------------
+
+2.
+SELECT SUM(`orderdetails`.quantityOrdered*`orderdetails`.priceEach) AS Total_Payment, 
+COUNT(DISTINCT `products`.productCode) AS product_variety,
+MAX(`orderdetails`.priceEach) AS Max_Price, MIN(`orderdetails`.priceEach) AS Min_Price
+FROM `products`, `orderdetails`,`orders`,`customers`
+WHERE `orders`.orderNumber = 10101 
+AND `customers`.customerNumber=`orders`.customerNumber 
+AND `orders`.orderNumber = `orderdetails`.orderNumber 
+AND `products`.productCode=`orderdetails`.productCode
+
+-----------------------------------------------------
+3.
+SELECT DISTINCT `customers`.customerNumber AS customerID, `customers`.customerName,
+`customers`.city,`customers`.phone FROM `customers`, `orders` 
+WHERE `customers`.city='Madrid'
+AND `customers`.customerNumber NOT IN(SELECT `orders`.customerNumber FROM orders)
+GROUP BY `customers`.customerNumber
+ORDER BY `customers`.customerNumber DESC
+-------------------------------------------------
+4.
+SELECT `products`.productCode AS productID, `products`.productName,
+SUM(`orderdetails`.quantityOrdered) AS total_quantity
+FROM `products`, `orderdetails`
+WHERE `products`.productCode=`orderdetails`.productCode
+GROUP BY `products`.productCode
+ORDER BY total_quantity DESC
+LIMIT 10
+
+--------------------------------------------------------
+5.
+SELECT main.orderNumber, main.productCode, main.quantityOrdered, sub.avg_qty
+FROM orderdetails AS main, (SELECT productCode,
+AVG(quantityOrdered) AS avg_qty FROM orderdetails
+GROUP BY productCode) AS sub
+WHERE main.quantityOrdered < sub.avg_qty
+AND main.productCode = sub.productCode
+ORDER BY main.quantityOrdered ASC
+
+----------------------------------------------------------
+6.
+SELECT c.customerName, c.customerNumber,
+SUM(sub.toBePaid)-p.totalPaid AS amount_Payable,
+ p.totalPaid AS TotalPaid, c.creditLimit
+FROM (
+	  SELECT SUM(quantityOrdered*priceEach) AS toBePaid, orderNumber 
+	  FROM orderdetails 
+      GROUP BY orderNumber
+      ) AS sub
+INNER JOIN orders AS o on sub.orderNumber = o.orderNumber
+INNER JOIN customers AS c on c.customerNumber = o.customerNumber
+INNER JOIN (
+		SELECT SUM(amount) as totalPaid, customerNumber
+	    FROM payments 
+        GROUP BY customerNumber
+        ) AS p ON p.customerNumber = c.customerNumber
+GROUP BY c.customerNumber
+HAVING SUM(sub.toBePaid)-p.totalPaid > c.creditLimit
+
+----------------------------------------
+7.
+ALTER TABLE customers ADD creditworthiness varchar(20);
+UPDATE customers SET creditworthiness = "good";
+UPDATE customers SET creditworthiness = "bad"
+WHERE customerNumber IN (
+SELECT sub1.customerNumber FROM (
+	SELECT c.customerName, c.customerNumber,
+	SUM(sub.toBePaid)-p.totalPaid AS amount_Payable,
+	 p.totalPaid AS TotalPaid, c.creditLimit
+	FROM (
+		  SELECT SUM(quantityOrdered*priceEach) AS toBePaid, orderNumber 
+		  FROM orderdetails 
+		  GROUP BY orderNumber
+		  ) AS sub
+	INNER JOIN orders AS o on sub.orderNumber = o.orderNumber
+	INNER JOIN customers AS c on c.customerNumber = o.customerNumber
+	INNER JOIN (
+			SELECT SUM(amount) as totalPaid, customerNumber
+			FROM payments 
+			GROUP BY customerNumber
+			) AS p ON p.customerNumber = c.customerNumber
+	GROUP BY c.customerNumber
+	HAVING SUM(sub.toBePaid)-p.totalPaid > c.creditLimit
+	) AS sub1
+);
+SELECT customerNumber, customerName, creditworthiness FROM customers
+WHERE creditworthiness = "bad"
+
+----------------------------------------------------------------
+8.
+SELECT DISTINCT emp.employeeNumber ,emp.firstName, emp.lastName, emp.jobTitle, sub.num_sub AS number_working_under, emp.reportsTo AS manager_id
+FROM employees AS e
+INNER JOIN employees AS emp ON e.reportsTo = emp.employeeNumber
+INNER JOIN  (
+	SELECT emp.employeeNumber AS emp_id,COUNT(DISTINCT e.employeeNumber) AS num_sub
+    FROM employees AS e
+	INNER JOIN employees AS emp ON e.reportsTo = emp.employeeNumber
+    WHERE e.reportsTo = emp.employeeNumber
+    GROUP BY emp.employeeNumber
+) AS sub ON sub.emp_id = emp.employeeNumber
+WHERE emp.reportsTo IS NOT NULL
+---------------------------------------------------
+9.
+SELECT p.productLine, SUM(sales) AS totalSales 
+FROM (
+	SELECT SUM(quantityOrdered*priceEach) AS sales,
+    productCode FROM orderdetails
+    GROUP BY productCode
+) AS sub
+INNER JOIN (
+	SELECT productline, productCode FROM products
+)AS p ON p.productCode = sub.productCode
+GROUP BY p.productLine
+ORDER BY SUM(sales) ASC
+LIMIT 1
+-------------------------------------------------------------
+10.
+SELECT c.customerNumber, COUNT(DISTINCT od.productCode)
+FROM customers AS c, orders AS o, orderdetails AS od
+WHERE o.customerNumber=c.customerNumber
+AND o.orderNumber = od.orderNumber
+AND c.customerNumber != 124 
+AND productCode IN (
+	SELECT DISTINCT productCode FROM customers AS c
+	INNER JOIN orders AS o ON o.customerNumber=c.customerNumber
+	INNER JOIN orderdetails AS od ON o.orderNumber = od.orderNumber
+    WHERE c.customerNumber=124
+)
+GROUP BY c.customerNumber
+ORDER BY COUNT(DISTINCT od.productCode) DESC
+LIMIT 1
